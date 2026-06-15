@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: rophim
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Zed359942
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -29,9 +29,9 @@ services:
     environment:
       DB_URL: jdbc:postgresql://db:5432/rophim
       DB_USERNAME: postgres
-      DB_PASSWORD: Zed359942
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DDL_AUTO: update
-      JWT_SECRET: pleasedontkillmeilldowhateveryouwant123456
+      JWT_SECRET: ${JWT_SECRET}
     ports:
       - "8080:8080"
 
