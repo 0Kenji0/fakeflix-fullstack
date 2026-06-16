@@ -14,7 +14,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
 import { MovieDetailSkeleton } from "../../components/SkeletonLoader";
-import { MovieDetailSkeleton } from "../../components/SkeletonLoader";
+
 
 interface Episode {
   id: number;
