@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 
 const BASE_URL = Platform.OS === "web"
   ? "http://localhost:8080"
-  : "https://fakeflix-fullstack-1.onrender.com"; 
+  : "https://fakeflix-fullstack-2.onrender.com"; 
 
 
 
