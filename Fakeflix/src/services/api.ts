@@ -2,10 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Platform } from "react-native";
 
-const BASE_URL = Platform.OS === "web"
-  ? "http://localhost:8080"
-  : "https://fakeflix-fullstack-2.onrender.com"; 
-
+const BASE_URL = "https://fakeflix-fullstack-2.onrender.com";
 
 
 const api = axios.create({
