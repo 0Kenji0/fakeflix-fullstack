@@ -20,6 +20,7 @@ interface AuthContextType {
     password: string,
   ) => Promise<void>;
   logout: () => Promise<void>;
+  setSession: (accessToken: string, refreshToken: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -88,9 +89,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
   };
 
+  const setSession = async (accessToken: string, refreshToken: string) => {
+    await AsyncStorage.setItem("token", accessToken);
+    await AsyncStorage.setItem("refreshToken", refreshToken);
+    setToken(accessToken);
+    const me = await api.get("/api/auth/me");
+    setUser(me.data);
+  };
+
   return (
     <AuthContext.Provider
-      value={{ token, user, login, register, logout, isLoading }}
+      value={{ token, user, login, register, logout, setSession, isLoading }}
     >
       {children}
     </AuthContext.Provider>
