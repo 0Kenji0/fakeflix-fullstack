@@ -90,14 +90,4 @@ export async function getExpoPushToken(): Promise<string | null> {
 
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ??
-      Constants?.easConfig?.projectId;
-
-    const tokenResponse = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined,
-    );
-    return tokenResponse.data;
-  } catch (e) {
-    console.warn("Không thể lấy Expo push token:", e);
-    return null;
-  }
-}
+      Constants?.easConf
