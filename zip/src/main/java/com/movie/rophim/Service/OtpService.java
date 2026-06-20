@@ -1,19 +1,24 @@
 package com.movie.rophim.Service;
 
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
 public class OtpService {
+
+    private static final Logger log = LoggerFactory.getLogger(OtpService.class);
 
     private final JavaMailSender mailSender;
     private final Map<String, String> otpStore = new ConcurrentHashMap<>();
@@ -22,8 +27,6 @@ public class OtpService {
 
     public void sendOtp(String email) {
         String otp = generateOtp();
-        otpStore.put(email, otp);
-        otpExpiry.put(email, System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(OTP_EXPIRY_MINUTES));
 
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(email);
@@ -35,7 +38,22 @@ public class OtpService {
                         "Không chia sẻ mã này với ai.\n\n" +
                         "Fakeflix Team"
         );
-        mailSender.send(message);
+
+        try {
+            log.info("Đang gửi OTP đến email: {}", email);
+            mailSender.send(message);
+            log.info("Đã gửi OTP thành công đến: {}", email);
+        } catch (Exception e) {
+            log.error("GỬI OTP THẤT BẠI cho email {}: {}", email, e.getMessage(), e);
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Không thể gửi email OTP. Vui lòng kiểm tra lại email hoặc thử lại sau."
+            );
+        }
+
+        // Chỉ lưu OTP vào store SAU KHI gửi mail thành công
+        otpStore.put(email, otp);
+        otpExpiry.put(email, System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(OTP_EXPIRY_MINUTES));
     }
 
     public boolean verifyOtp(String email, String otp) {
