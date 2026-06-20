@@ -1,7 +1,7 @@
 package com.movie.rophim.Config;
 
 import com.movie.rophim.Security.JwtAuthenticationFilter;
-import com.movie.rophim.Security.OAuth2AuthenticationSuccessHandler;
+import com.movie.rophim.Security.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,15 +27,20 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CorsConfigurationSource corsConfigurationSource;
     private final RateLimitFilter rateLimitFilter;
-    private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
-
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    //Security JWT and CORS
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(csrf -> csrf.disable())
+                .oauth2Login(oauth2 -> oauth2
+                        .loginPage("/login")
+                        .successHandler(oAuth2LoginSuccessHandler)
+                )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
@@ -43,9 +48,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/genres/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/actors/**").permitAll()
                         .anyRequest().authenticated()
-                )
-                .oauth2Login(oauth2 -> oauth2
-                        .successHandler(oAuth2AuthenticationSuccessHandler)
                 )
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

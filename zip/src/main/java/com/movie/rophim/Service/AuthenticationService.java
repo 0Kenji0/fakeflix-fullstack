@@ -38,6 +38,7 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final JWTService jwtService;
     private final UserDetailsService userDetailsService;
+    private final OtpService otpService;
 
     @Value("${jwt.refresh-expiration-days:7}")
     private long refreshExpirationDays;
@@ -47,6 +48,11 @@ public class AuthenticationService {
 
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+        }
+
+        // Bắt buộc xác thực OTP trước khi tạo tài khoản
+        if (!otpService.verifyOtp(request.getEmail(), request.getOtp())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP không đúng hoặc đã hết hạn");
         }
 
         // FIX: tìm "USER" khớp với DataInitializer save "USER"
@@ -139,8 +145,31 @@ public class AuthenticationService {
                         .collect(Collectors.toSet()))
                 .build();
     }
+
+    // OAUTH: tìm user theo email, nếu chưa có thì tạo mới (không cần password)
+    public User findOrCreateOAuthUser(String email, String name, String avatarUrl) {
+        return userRepository.findByEmail(email)
+                .orElseGet(() -> {
+                    Role role = roleRepository.findByName("USER")
+                            .orElseThrow(() -> new ResponseStatusException(
+                                    HttpStatus.INTERNAL_SERVER_ERROR, "Role not found"));
+
+                    User newUser = User.builder()
+                            .username(name != null && !name.isBlank() ? name : email.split("@")[0])
+                            .email(email)
+                            // user OAuth không đăng nhập bằng password, lưu hash của chuỗi random để cột password không null
+                            .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
+                            .imageUrl(avatarUrl)
+                            .createdAt(LocalDateTime.now())
+                            .roles(Set.of(role))
+                            .build();
+
+                    return userRepository.save(newUser);
+                });
+    }
+
     // HELPER: tạo access + refresh token
-    private AuthResponse buildAuthResponse(User user, String message) {
+    public AuthResponse buildAuthResponse(User user, String message) {
 
         String accessToken = jwtService.generateToken(user.getEmail());
         String refreshTokenStr = jwtService.generateRefreshToken();

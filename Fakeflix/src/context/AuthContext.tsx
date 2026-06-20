@@ -14,13 +14,15 @@ interface AuthContextType {
   token: string | null;
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
+  sendOtp: (email: string) => Promise<void>;
   register: (
     username: string,
     email: string,
     password: string,
+    otp: string,
   ) => Promise<void>;
+  loginWithTokens: (accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
-  setSession: (accessToken: string, refreshToken: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -61,17 +63,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(me.data);
   };
 
+  const sendOtp = async (email: string) => {
+    await api.post("/api/auth/send-otp", { email });
+  };
+
   const register = async (
     username: string,
     email: string,
     password: string,
+    otp: string,
   ) => {
     const res = await api.post("/api/auth/register", {
       username,
       email,
       password,
+      otp,
     });
     const { accessToken, refreshToken } = res.data;
+    await AsyncStorage.setItem("token", accessToken);
+    await AsyncStorage.setItem("refreshToken", refreshToken);
+    setToken(accessToken);
+    const me = await api.get("/api/auth/me");
+    setUser(me.data);
+  };
+
+  // Dùng khi nhận token thật từ redirect Google OAuth (xem app/oauth-callback.tsx)
+  const loginWithTokens = async (accessToken: string, refreshToken: string) => {
     await AsyncStorage.setItem("token", accessToken);
     await AsyncStorage.setItem("refreshToken", refreshToken);
     setToken(accessToken);
@@ -89,17 +106,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
   };
 
-  const setSession = async (accessToken: string, refreshToken: string) => {
-    await AsyncStorage.setItem("token", accessToken);
-    await AsyncStorage.setItem("refreshToken", refreshToken);
-    setToken(accessToken);
-    const me = await api.get("/api/auth/me");
-    setUser(me.data);
-  };
-
   return (
     <AuthContext.Provider
-      value={{ token, user, login, register, logout, setSession, isLoading }}
+      value={{
+        token,
+        user,
+        login,
+        sendOtp,
+        register,
+        loginWithTokens,
+        logout,
+        isLoading,
+      }}
     >
       {children}
     </AuthContext.Provider>
