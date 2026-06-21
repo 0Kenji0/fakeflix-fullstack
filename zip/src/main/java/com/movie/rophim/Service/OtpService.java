@@ -1,94 +1,59 @@
 package com.movie.rophim.Service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.security.SecureRandom;
-import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-@Slf4j
 @Service
+@RequiredArgsConstructor
 public class OtpService {
 
-    @Value("${brevo.api.key}")
-    private String brevoApiKey;
+    private static final Logger log = LoggerFactory.getLogger(OtpService.class);
 
-    @Value("${brevo.sender.email}")
-    private String senderEmail;
-
-    @Value("${brevo.sender.name:Fakeflix}")
-    private String senderName;
-
-    private static final String BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
-
+    private final JavaMailSender mailSender;
     private final Map<String, String> otpStore = new ConcurrentHashMap<>();
     private final Map<String, Long> otpExpiry = new ConcurrentHashMap<>();
     private static final long OTP_EXPIRY_MINUTES = 5;
 
     public void sendOtp(String email) {
         String otp = generateOtp();
-        otpStore.put(email, otp);
-        otpExpiry.put(email, System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(OTP_EXPIRY_MINUTES));
 
-        String html = "<div style=\"font-family:sans-serif\">"
-                + "<p>Xin chào!</p>"
-                + "<p>Mã OTP của bạn là: <strong style=\"font-size:20px\">" + otp + "</strong></p>"
-                + "<p>Mã có hiệu lực trong " + OTP_EXPIRY_MINUTES + " phút. Không chia sẻ mã này với ai.</p>"
-                + "<p>Fakeflix Team</p>"
-                + "</div>";
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(email);
+        message.setSubject("Fakeflix - Mã xác thực OTP");
+        message.setText(
+                "Xin chào!\n\n" +
+                        "Mã OTP của bạn là: " + otp + "\n\n" +
+                        "Mã có hiệu lực trong " + OTP_EXPIRY_MINUTES + " phút.\n" +
+                        "Không chia sẻ mã này với ai.\n\n" +
+                        "Fakeflix Team"
+        );
 
         try {
-            ObjectNode sender = objectMapper.createObjectNode();
-            sender.put("name", senderName);
-            sender.put("email", senderEmail);
-
-            ObjectNode recipient = objectMapper.createObjectNode();
-            recipient.put("email", email);
-
-            ObjectNode body = objectMapper.createObjectNode();
-            body.set("sender", sender);
-            body.putArray("to").add(recipient);
-            body.put("subject", "Fakeflix - Mã xác thực OTP");
-            body.put("htmlContent", html);
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(BREVO_API_URL))
-                    .header("accept", "application/json")
-                    .header("api-key", brevoApiKey)
-                    .header("content-type", "application/json")
-                    .timeout(Duration.ofSeconds(15))
-                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                log.info("Đã gửi OTP qua Brevo tới: {}", email);
-            } else {
-                log.error("GỬI OTP THẤT BẠI cho email {}: HTTP {} - {}", email, response.statusCode(), response.body());
-                throw new RuntimeException("Gửi email thất bại: " + response.body());
-            }
-        } catch (RuntimeException e) {
-            throw e;
+            log.info("Đang gửi OTP đến email: {}", email);
+            mailSender.send(message);
+            log.info("Đã gửi OTP thành công đến: {}", email);
         } catch (Exception e) {
-            log.error("GỬI OTP THẤT BẠI cho email {}: {}", email, e.getMessage());
-            throw new RuntimeException("Gửi email thất bại", e);
+            log.error("GỬI OTP THẤT BẠI cho email {}: {}", email, e.getMessage(), e);
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Không thể gửi email OTP. Vui lòng kiểm tra lại email hoặc thử lại sau."
+            );
         }
+
+        // Chỉ lưu OTP vào store SAU KHI gửi mail thành công
+        otpStore.put(email, otp);
+        otpExpiry.put(email, System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(OTP_EXPIRY_MINUTES));
     }
 
     public boolean verifyOtp(String email, String otp) {
