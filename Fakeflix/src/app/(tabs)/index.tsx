@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useIsFocused } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -10,7 +11,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import { HomeScreenSkeleton } from "../../components/SkeletonLoader";
 import { useAuth } from "../../context/AuthContext";
@@ -37,6 +38,7 @@ export default function HomeScreen() {
   const [topRated, setTopRated] = useState<Movie[]>([]);
   const [mostViewed, setMostViewed] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSlowLoadHint, setShowSlowLoadHint] = useState(false);
   const [sliderIndex, setSliderIndex] = useState(0);
   const [searchText, setSearchText] = useState("");
   const [scrolled, setScrolled] = useState(false);
@@ -70,6 +72,16 @@ export default function HomeScreen() {
       };
     }
   }, [isFocused]);
+  // Backend Render free tier có thể "ngủ" và mất hơn chục giây để khởi động lại
+  // (cold start) — nếu loading lâu hơn 4s, hiện thông báo để người dùng biết đang chờ gì
+  useEffect(() => {
+    if (!loading) {
+      setShowSlowLoadHint(false);
+      return;
+    }
+    const hintTimer = setTimeout(() => setShowSlowLoadHint(true), 4000);
+    return () => clearTimeout(hintTimer);
+  }, [loading]);
 
   useEffect(() => {
     if (!isFocused || featured.length <= 1) return;
@@ -188,9 +200,20 @@ export default function HomeScreen() {
   );
 
   if (loading) {
-    return <HomeScreenSkeleton />;
+    return (
+      <View style={{ flex: 1 }}>
+        <HomeScreenSkeleton />
+        {showSlowLoadHint && (
+          <View style={styles.slowLoadOverlay}>
+            <ActivityIndicator color="#E50914" size="small" />
+            <Text style={styles.slowLoadText}>
+              {"Đang khởi động server, vui lòng chờ trong giây lát..."}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
   }
-
   const WebHeader = () => (
     <div
       style={{
@@ -907,6 +930,22 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#141414" },
+  slowLoadOverlay: {
+    position: "absolute",
+    bottom: 32,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 10,
+    paddingHorizontal: 24,
+  },
+  slowLoadText: {
+    color: "#aaa",
+    fontSize: 13,
+    textAlign: "center",
+  },
 
   scrollView: { flex: 1 },
   mobileNavbar: {

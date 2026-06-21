@@ -1,13 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { Platform } from "react-native";
 
 export const BASE_URL = "https://fakeflix-fullstack-1.onrender.com";
 
-
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: 60000, // 60s — chịu được cold start khi backend Render free tier "ngủ"
 });
 
 // Gắn token vào mỗi request
@@ -34,9 +32,11 @@ api.interceptors.response.use(
         const refreshToken = await AsyncStorage.getItem("refreshToken");
         if (!refreshToken) throw new Error("No refresh token");
 
-        const res = await axios.post(`${BASE_URL}/api/auth/refresh`, {
-          refreshToken,
-        });
+        const res = await axios.post(
+          `${BASE_URL}/api/auth/refresh`,
+          { refreshToken },
+          { timeout: 60000 },
+        );
 
         const { accessToken } = res.data;
         await AsyncStorage.setItem("token", accessToken);
