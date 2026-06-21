@@ -33,11 +33,11 @@ public class MovieController {
             @RequestParam(required = false) MovieType type,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) Integer releaseYear,
+            @RequestParam(required = false) Long genreId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return movieService.searchMovies(keyword, status, type, country, releaseYear, page, size);
+        return movieService.searchMovies(keyword, status, type, country, releaseYear, genreId, page, size);
     }
-
 
 
 

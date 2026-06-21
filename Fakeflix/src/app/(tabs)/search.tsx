@@ -1,5 +1,5 @@
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -23,14 +23,23 @@ interface Movie {
 }
 
 export default function SearchScreen() {
-  const [keyword, setKeyword] = useState("");
+  const params = useLocalSearchParams<{
+    q?: string;
+    type?: string;
+    genreId?: string;
+    genreName?: string;
+  }>();
+
+  const [keyword, setKeyword] = useState(params.q || "");
   const [results, setResults] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  // Tên thể loại hiển thị dưới dạng badge khi lọc theo dropdown Thể loại ở navbar
+  const activeGenreName = params.genreName || null;
 
-  const search = async (text: string) => {
+  const search = async (text: string, type?: string, genreId?: string) => {
     setKeyword(text);
-    if (!text.trim()) {
+    if (!text.trim() && !type && !genreId) {
       setResults([]);
       setSearched(false);
       return;
@@ -39,7 +48,13 @@ export default function SearchScreen() {
     setSearched(true);
     try {
       const res = await api.get("/api/movies/search", {
-        params: { keyword: text, page: 0, size: 30 },
+        params: {
+          keyword: text || undefined,
+          type: type || undefined,
+          genreId: genreId || undefined,
+          page: 0,
+          size: 30,
+        },
       });
       setResults(res.data.content || []);
     } catch (e) {
@@ -49,10 +64,29 @@ export default function SearchScreen() {
     }
   };
 
+  // Áp dụng query params (đến từ navbar/dropdown trang chủ) ngay khi vào trang
+  useEffect(() => {
+    if (params.q) {
+      search(params.q, params.type, params.genreId);
+    } else if (params.type || params.genreId) {
+      search("", params.type, params.genreId);
+    }
+  }, [params.q, params.type, params.genreId]);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{"Tìm kiếm"}</Text>
+        {activeGenreName && (
+          <View style={styles.genreBadge}>
+            <Text style={styles.genreBadgeText}>{activeGenreName}</Text>
+            <TouchableOpacity
+              onPress={() => router.replace("/(tabs)/search" as any)}
+            >
+              <Text style={styles.genreBadgeClose}>{"✕"}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <View style={styles.searchBar}>
@@ -152,6 +186,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#141414" },
   header: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 12 },
   headerTitle: { color: "#fff", fontSize: 22, fontWeight: "800" },
+  genreBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(229,9,20,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(229,9,20,0.4)",
+    borderRadius: 16,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    gap: 8,
+  },
+  genreBadgeText: { color: "#ff8585", fontSize: 12.5, fontWeight: "600" },
+  genreBadgeClose: { color: "#ff8585", fontSize: 12, fontWeight: "700" },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",

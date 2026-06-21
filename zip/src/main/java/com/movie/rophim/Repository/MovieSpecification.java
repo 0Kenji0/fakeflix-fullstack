@@ -31,4 +31,13 @@ public class MovieSpecification {
         return (root, query, cb) -> year == null ? null :
                 cb.equal(root.get("releaseYear"), year);
     }
+
+    public static Specification<Movie> hasGenreId(Long genreId) {
+        return (root, query, cb) -> {
+            if (genreId == null) return null;
+            // tránh trùng dòng do join ManyToMany
+            query.distinct(true);
+            return cb.equal(root.join("genres").get("id"), genreId);
+        };
+    }
 }

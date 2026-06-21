@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useIsFocused } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -11,11 +10,11 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
+import { HomeScreenSkeleton } from "../../components/SkeletonLoader";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
-import { HomeScreenSkeleton } from "../../components/SkeletonLoader";
 
 const CARD_WIDTH = 130;
 
@@ -33,6 +32,7 @@ interface Movie {
 
 export default function HomeScreen() {
   const { user, token } = useAuth();
+  const isFocused = useIsFocused();
   const [featured, setFeatured] = useState<Movie[]>([]);
   const [topRated, setTopRated] = useState<Movie[]>([]);
   const [mostViewed, setMostViewed] = useState<Movie[]>([]);
@@ -44,10 +44,22 @@ export default function HomeScreen() {
     Platform.OS === "web" ? window.innerWidth : Dimensions.get("window").width,
   );
   const timerRef = useRef<any>(null);
+  const searchTimerRef = useRef<any>(null);
+
+  const [genres, setGenres] = useState<{ id: number; name: string }[]>([]);
+  const [showGenreMenu, setShowGenreMenu] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState<Movie[]>([]);
+  const [showSearchMenu, setShowSearchMenu] = useState(false);
+  const [searchingSuggest, setSearchingSuggest] = useState(false);
 
   useEffect(() => {
     loadData();
-    if (Platform.OS === "web") {
+  }, []);
+
+  // Chỉ lắng nghe resize/scroll của window khi tab Trang chủ đang được focus,
+  // để tránh banner/carousel "rò" sang các tab khác khi Tabs không unmount thật trên web
+  useEffect(() => {
+    if (Platform.OS === "web" && isFocused) {
       const handleResize = () => setScreenWidth(window.innerWidth);
       const handleScroll = () => setScrolled(window.scrollY > 50);
       window.addEventListener("resize", handleResize);
@@ -57,26 +69,28 @@ export default function HomeScreen() {
         window.removeEventListener("scroll", handleScroll);
       };
     }
-  }, []);
+  }, [isFocused]);
 
   useEffect(() => {
-    if (featured.length <= 1) return;
+    if (!isFocused || featured.length <= 1) return;
     timerRef.current = setInterval(() => {
       setSliderIndex((prev) => (prev + 1) % featured.length);
     }, 5000);
     return () => clearInterval(timerRef.current);
-  }, [featured]);
+  }, [featured, isFocused]);
 
   const loadData = async () => {
     try {
-      const [f, t, m] = await Promise.all([
+      const [f, t, m, g] = await Promise.all([
         api.get("/api/movies/featured"),
         api.get("/api/movies/top-rated"),
         api.get("/api/movies/most-viewed"),
+        api.get("/api/genres").catch(() => ({ data: [] })),
       ]);
       setFeatured(f.data);
       setTopRated(t.data);
       setMostViewed(m.data);
+      setGenres(Array.isArray(g.data) ? g.data : g.data?.content || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -84,10 +98,38 @@ export default function HomeScreen() {
     }
   };
 
+  const handleSearchInputChange = (text: string) => {
+    setSearchText(text);
+    clearTimeout(searchTimerRef.current);
+
+    if (!text.trim()) {
+      setSearchSuggestions([]);
+      setShowSearchMenu(false);
+      return;
+    }
+
+    setShowSearchMenu(true);
+    searchTimerRef.current = setTimeout(async () => {
+      setSearchingSuggest(true);
+      try {
+        const res = await api.get("/api/movies/search", {
+          params: { keyword: text, page: 0, size: 6 },
+        });
+        setSearchSuggestions(res.data.content || []);
+      } catch (e) {
+        setSearchSuggestions([]);
+      } finally {
+        setSearchingSuggest(false);
+      }
+    }, 350);
+  };
+
   const handleSearch = () => {
     if (searchText.trim()) {
       router.push(`/(tabs)/search?q=${encodeURIComponent(searchText)}` as any);
       setSearchText("");
+      setShowSearchMenu(false);
+      setSearchSuggestions([]);
     }
   };
 
@@ -188,9 +230,6 @@ export default function HomeScreen() {
       <div style={{ display: "flex", gap: 4, flex: 1, alignItems: "center" }}>
         {[
           { label: "Trang chủ", route: "/(tabs)" },
-          { label: "Phim lẻ", route: "/(tabs)/search?type=MOVIE" },
-          { label: "Series", route: "/(tabs)/search?type=SERIES" },
-          { label: "Anime", route: "/(tabs)/search?type=ANIME" },
           { label: "Tìm kiếm", route: "/(tabs)/search" },
         ].map((item) => (
           <div
@@ -220,38 +259,243 @@ export default function HomeScreen() {
             {item.label}
           </div>
         ))}
+
+        {/* Dropdown Thể loại */}
+        <div
+          style={{ position: "relative" }}
+          onMouseEnter={() => setShowGenreMenu(true)}
+          onMouseLeave={() => setShowGenreMenu(false)}
+        >
+          <div
+            style={{
+              color: showGenreMenu ? "#fff" : "#ccc",
+              fontSize: 13,
+              fontWeight: 600,
+              padding: "6px 12px",
+              borderRadius: 6,
+              cursor: "pointer",
+              backgroundColor: showGenreMenu
+                ? "rgba(255,255,255,0.08)"
+                : "transparent",
+              whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            {"Thể loại"}
+            <span
+              style={{
+                fontSize: 9,
+                transform: showGenreMenu ? "rotate(180deg)" : "none",
+                transition: "transform 0.2s",
+              }}
+            >
+              {"▼"}
+            </span>
+          </div>
+
+          {showGenreMenu && (
+            <div
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                marginTop: 4,
+                background: "rgba(20,20,20,0.98)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 8,
+                padding: 8,
+                minWidth: 200,
+                maxHeight: 320,
+                overflowY: "auto",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 2,
+              }}
+            >
+              {genres.length === 0 ? (
+                <div style={{ color: "#666", fontSize: 12, padding: 8 }}>
+                  {"Không có thể loại"}
+                </div>
+              ) : (
+                genres.map((g) => (
+                  <div
+                    key={g.id}
+                    onClick={() => {
+                      setShowGenreMenu(false);
+                      router.push(
+                        `/(tabs)/search?genreId=${g.id}&genreName=${encodeURIComponent(g.name)}` as any,
+                      );
+                    }}
+                    style={{
+                      color: "#ccc",
+                      fontSize: 12.5,
+                      padding: "7px 10px",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.color = "#fff";
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        "rgba(229,9,20,0.15)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.color = "#ccc";
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        "transparent";
+                    }}
+                  >
+                    {g.name}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          backgroundColor: "rgba(255,255,255,0.1)",
-          borderRadius: 20,
-          paddingLeft: 12,
-          paddingRight: 4,
-          marginRight: 16,
-          border: "1px solid rgba(255,255,255,0.15)",
-        }}
-      >
-        <span style={{ color: "#888", fontSize: 14, marginRight: 6 }}>
-          {"🔍"}
-        </span>
-        <input
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          placeholder="Tìm phim..."
+      <div style={{ position: "relative" }}>
+        <div
           style={{
-            background: "transparent",
-            border: "none",
-            outline: "none",
-            color: "#fff",
-            fontSize: 13,
-            width: 160,
-            padding: "7px 4px",
+            display: "flex",
+            alignItems: "center",
+            backgroundColor: "rgba(255,255,255,0.1)",
+            borderRadius: 20,
+            paddingLeft: 12,
+            paddingRight: 4,
+            marginRight: 16,
+            border: "1px solid rgba(255,255,255,0.15)",
+            width: 240,
+            minWidth: 200,
+            flexShrink: 0,
+            boxSizing: "border-box",
           }}
-        />
+        >
+          <span style={{ color: "#888", fontSize: 14, marginRight: 6 }}>
+            {"🔍"}
+          </span>
+          <input
+            value={searchText}
+            onChange={(e) => handleSearchInputChange(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            onFocus={() => searchText.trim() && setShowSearchMenu(true)}
+            onBlur={() => setTimeout(() => setShowSearchMenu(false), 150)}
+            placeholder="Tìm phim..."
+            style={{
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "#fff",
+              fontSize: 13,
+              width: "100%",
+              padding: "7px 4px",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        {showSearchMenu && searchText.trim() && (
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              right: 16,
+              marginTop: 4,
+              background: "rgba(20,20,20,0.98)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 8,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+              overflow: "hidden",
+              zIndex: 1001,
+            }}
+          >
+            {searchingSuggest ? (
+              <div style={{ padding: 14, color: "#888", fontSize: 12.5 }}>
+                {"Đang tìm..."}
+              </div>
+            ) : searchSuggestions.length === 0 ? (
+              <div style={{ padding: 14, color: "#666", fontSize: 12.5 }}>
+                {"Không tìm thấy phim phù hợp"}
+              </div>
+            ) : (
+              <>
+                {searchSuggestions.map((m) => (
+                  <div
+                    key={m.id}
+                    onClick={() => {
+                      setShowSearchMenu(false);
+                      setSearchText("");
+                      router.push(`/movie/${m.id}` as any);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 12px",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        "rgba(255,255,255,0.06)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        "transparent";
+                    }}
+                  >
+                    <img
+                      src={m.posterUrl}
+                      style={{
+                        width: 32,
+                        height: 46,
+                        objectFit: "cover",
+                        borderRadius: 4,
+                        flexShrink: 0,
+                        backgroundColor: "#2a2a2a",
+                      }}
+                    />
+                    <div style={{ overflow: "hidden" }}>
+                      <div
+                        style={{
+                          color: "#fff",
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {m.title}
+                      </div>
+                      <div style={{ color: "#888", fontSize: 11 }}>
+                        {m.releaseYear || ""}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div
+                  onClick={handleSearch}
+                  style={{
+                    padding: "9px 12px",
+                    color: "#E50914",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    borderTop: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  {`Xem tất cả kết quả cho "${searchText}"`}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {token && user ? (
@@ -380,7 +624,7 @@ export default function HomeScreen() {
           <WebHeader />
         ) : null}
 
-        {featured.length > 0 ? (
+        {featured.length > 0 && isFocused ? (
           <View style={{ marginBottom: 24 }}>
             {Platform.OS === "web" ? (
               <div

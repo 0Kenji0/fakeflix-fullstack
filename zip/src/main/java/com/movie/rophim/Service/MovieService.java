@@ -154,11 +154,11 @@ public class MovieService {
 
     public Page<MovieDTO> searchMovies(
             String keyword, MovieStatus status, MovieType type,
-            String country, Integer releaseYear, int page, int size) {
+            String country, Integer releaseYear, Long genreId, int page, int size) {
         Specification<Movie> spec = Specification
                 .where(hasKeyword(keyword)).and(hasStatus(status))
                 .and(hasType(type)).and(hasCountry(country))
-                .and(hasReleaseYear(releaseYear));
+                .and(hasReleaseYear(releaseYear)).and(hasGenreId(genreId));
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
         return movieRepository.findAll(spec, pageable).map(this::mapToDTO);
     }
