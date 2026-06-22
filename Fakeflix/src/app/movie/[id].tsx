@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,10 +12,28 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { MovieDetailSkeleton } from "../../components/SkeletonLoader";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
-import { MovieDetailSkeleton } from "../../components/SkeletonLoader";
 
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      iframe: React.DetailedHTMLProps<
+        React.IframeHTMLAttributes<HTMLIFrameElement>,
+        HTMLIFrameElement
+      >;
+    }
+  }
+}
+
+function getYouTubeId(url: string): string | null {
+  if (!url) return null;
+  const match = url.match(
+    /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+  );
+  return match ? match[1] : null;
+}
 
 interface Episode {
   id: number;
@@ -288,6 +307,7 @@ export default function MovieDetailScreen() {
   }
 
   const isSeries = movie.type === "SERIES" || movie.type === "ANIME";
+  const youtubeId = getYouTubeId(movie.trailerUrl || "");
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -296,6 +316,7 @@ export default function MovieDetailScreen() {
         <Image
           source={{ uri: movie.bannerUrl || movie.posterUrl }}
           style={styles.banner}
+          resizeMode="cover"
         />
         <View style={styles.bannerOverlay} />
         <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
@@ -363,6 +384,21 @@ export default function MovieDetailScreen() {
             {isSeries && episodes.length > 0 ? "Xem từ tập 1" : "Phát"}
           </Text>
         </TouchableOpacity>
+
+        {/* Trailer YouTube */}
+        {!!youtubeId && Platform.OS === "web" && (
+          <View style={styles.trailerWrapper}>
+            <Text style={styles.sectionTitle}>{"Trailer"}</Text>
+            <View style={styles.trailerContainer}>
+              <iframe
+                src={`https://www.youtube.com/embed/${youtubeId}?rel=0`}
+                style={{ width: "100%", height: "100%", border: "none" }}
+                allowFullScreen
+                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              />
+            </View>
+          </View>
+        )}
 
         <View style={styles.divider} />
 
@@ -507,7 +543,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#141414",
   },
   errorText: { color: "#fff", fontSize: 16 },
-  bannerWrapper: { width: "100%", height: 280, position: "relative" },
+  bannerWrapper: {
+    width: "100%",
+    height: 280,
+    position: "relative",
+    overflow: "hidden",
+  },
   banner: { width: "100%", height: "100%", backgroundColor: "#2a2a2a" },
   bannerOverlay: {
     position: "absolute",
@@ -576,6 +617,22 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     fontSize: 16,
     marginLeft: 8,
+  },
+  trailerWrapper: {
+    marginBottom: 20,
+  },
+  trailerContainer: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#000",
+  },
+  sectionTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 10,
   },
   divider: { height: 1, backgroundColor: "#2a2a2a", marginVertical: 20 },
   episodeSection: { marginBottom: 8 },

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -34,11 +34,11 @@ export default function SearchScreen() {
   const [results, setResults] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  // Tên thể loại hiển thị dưới dạng badge khi lọc theo dropdown Thể loại ở navbar
   const activeGenreName = params.genreName || null;
+  const debounceRef = useRef<any>(null);
 
-  const search = async (text: string, type?: string, genreId?: string) => {
-    setKeyword(text);
+  // Hàm thực hiện tìm kiếm (không thay đổi keyword state)
+  const doSearch = async (text: string, type?: string, genreId?: string) => {
     if (!text.trim() && !type && !genreId) {
       setResults([]);
       setSearched(false);
@@ -64,13 +64,29 @@ export default function SearchScreen() {
     }
   };
 
-  // Áp dụng query params (đến từ navbar/dropdown trang chủ) ngay khi vào trang
+  // Khi người dùng gõ: chỉ update keyword, debounce mới gọi API
+  const handleChangeText = (text: string) => {
+    setKeyword(text);
+    clearTimeout(debounceRef.current);
+    if (!text.trim()) {
+      setResults([]);
+      setSearched(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      doSearch(text, params.type, params.genreId);
+    }, 350);
+  };
+
+  // Áp dụng query params từ navbar/dropdown trang chủ ngay khi vào trang
   useEffect(() => {
     if (params.q) {
-      search(params.q, params.type, params.genreId);
+      setKeyword(params.q);
+      doSearch(params.q, params.type, params.genreId);
     } else if (params.type || params.genreId) {
-      search("", params.type, params.genreId);
+      doSearch("", params.type, params.genreId);
     }
+    return () => clearTimeout(debounceRef.current);
   }, [params.q, params.type, params.genreId]);
 
   return (
@@ -96,12 +112,16 @@ export default function SearchScreen() {
           placeholder="Tìm phim, thể loại..."
           placeholderTextColor="#666"
           value={keyword}
-          onChangeText={search}
+          onChangeText={handleChangeText}
           returnKeyType="search"
+          onSubmitEditing={() => doSearch(keyword, params.type, params.genreId)}
+          autoCorrect={false}
+          autoCapitalize="none"
         />
         {keyword.length > 0 && (
           <TouchableOpacity
             onPress={() => {
+              clearTimeout(debounceRef.current);
               setKeyword("");
               setResults([]);
               setSearched(false);

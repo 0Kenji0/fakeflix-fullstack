@@ -214,7 +214,9 @@ export default function HomeScreen() {
       </View>
     );
   }
-  const WebHeader = () => (
+  // Đổi thành function thường (không phải component) để tránh React unmount/remount
+  // mỗi lần re-render → input bị mất focus sau mỗi ký tự gõ
+  const renderWebHeader = () => (
     <div
       style={{
         position: "fixed",
@@ -642,10 +644,10 @@ export default function HomeScreen() {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        {Platform.OS === "web" ? (
-          // @ts-ignore
-          <WebHeader />
-        ) : null}
+        {Platform.OS === "web"
+          ? // @ts-ignore – gọi như function thường để tránh remount mỗi lần re-render
+            renderWebHeader()
+          : null}
 
         {featured.length > 0 && isFocused ? (
           <View style={{ marginBottom: 24 }}>

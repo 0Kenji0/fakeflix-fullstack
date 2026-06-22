@@ -2,8 +2,10 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Image,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -19,6 +21,15 @@ interface Favorite {
   movieTitle: string;
   posterUrl: string;
 }
+
+const NUM_COLUMNS = 3;
+const SCREEN_WIDTH =
+  Platform.OS === "web" ? 390 : Dimensions.get("window").width;
+const HORIZONTAL_PADDING = 12;
+const ITEM_MARGIN = 4;
+const CARD_WIDTH =
+  (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - ITEM_MARGIN * 2 * NUM_COLUMNS) /
+  NUM_COLUMNS;
 
 export default function FavoritesScreen() {
   const { token } = useAuth();
@@ -79,7 +90,7 @@ export default function FavoritesScreen() {
       <FlatList
         data={favorites}
         keyExtractor={(item) => item.id.toString()}
-        numColumns={3}
+        numColumns={NUM_COLUMNS}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.row}
         renderItem={({ item }) => (
@@ -126,12 +137,15 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: "#fff", fontSize: 22, fontWeight: "800" },
   headerCount: { color: "#666", fontSize: 13 },
-  grid: { paddingHorizontal: 12, paddingBottom: 40 },
-  row: { marginBottom: 8 },
-  card: { flex: 1, marginHorizontal: 4 },
+  grid: { paddingHorizontal: HORIZONTAL_PADDING, paddingBottom: 40 },
+  row: { marginBottom: 10 },
+  card: {
+    width: CARD_WIDTH,
+    marginHorizontal: ITEM_MARGIN,
+  },
   poster: {
-    width: "100%",
-    aspectRatio: 2 / 3,
+    width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.5,
     borderRadius: 6,
     backgroundColor: "#2a2a2a",
   },

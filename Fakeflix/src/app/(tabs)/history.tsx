@@ -15,7 +15,7 @@ import {
   CloseIcon,
   FilmIcon,
   PlayIcon,
-  TimeIcon
+  TimeIcon,
 } from "../../components/icons";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
@@ -153,11 +153,12 @@ export default function HistoryScreen() {
               </Text>
               <TouchableOpacity
                 style={styles.continueBtn}
-                onPress={() =>
+                onPress={(e) => {
+                  e.stopPropagation && e.stopPropagation();
                   router.push(
                     `/watch/${item.movieId}?title=${encodeURIComponent(item.movieTitle)}` as any,
-                  )
-                }
+                  );
+                }}
               >
                 <PlayIcon size={12} color="#fff" />
                 <Text style={styles.continueBtnText}>{"Xem tiếp"}</Text>
@@ -165,7 +166,10 @@ export default function HistoryScreen() {
             </View>
             <TouchableOpacity
               style={styles.deleteBtn}
-              onPress={() => deleteHistory(item.id)}
+              onPress={(e) => {
+                e.stopPropagation && e.stopPropagation();
+                deleteHistory(item.id);
+              }}
             >
               <CloseIcon size={18} color="#666" />
             </TouchableOpacity>
