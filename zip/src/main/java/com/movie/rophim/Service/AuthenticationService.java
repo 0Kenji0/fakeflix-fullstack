@@ -13,7 +13,6 @@ import com.movie.rophim.Repository.UserRepository;
 import com.movie.rophim.Security.JWTService;
 import lombok.RequiredArgsConstructor;
 
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,7 +28,6 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-
 public class AuthenticationService {
 
     private final UserRepository userRepository;
@@ -38,7 +36,6 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final JWTService jwtService;
     private final UserDetailsService userDetailsService;
-    private final OtpService otpService;
 
     @Value("${jwt.refresh-expiration-days:7}")
     private long refreshExpirationDays;
@@ -50,12 +47,10 @@ public class AuthenticationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
         }
 
-        // Bắt buộc xác thực OTP trước khi tạo tài khoản
-        if (!otpService.verifyOtp(request.getEmail(), request.getOtp())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP không đúng hoặc đã hết hạn");
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
         }
 
-        // FIX: tìm "USER" khớp với DataInitializer save "USER"
         Role role = roleRepository.findByName("USER")
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.INTERNAL_SERVER_ERROR, "Role not found"));
@@ -83,7 +78,6 @@ public class AuthenticationService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
         }
 
-        // Thu hồi tất cả refresh token cũ
         refreshTokenRepository.revokeAllByUserId(user.getId());
 
         return buildAuthResponse(user, "Login success");
@@ -106,8 +100,6 @@ public class AuthenticationService {
         }
 
         User user = refreshToken.getUser();
-
-        // Thu hồi token cũ, cấp token mới
         refreshTokenRepository.revokeAllByUserId(user.getId());
 
         return buildAuthResponse(user, "Token refreshed");
@@ -146,7 +138,7 @@ public class AuthenticationService {
                 .build();
     }
 
-    // OAUTH: tìm user theo email, nếu chưa có thì tạo mới (không cần password)
+    // OAUTH
     public User findOrCreateOAuthUser(String email, String name, String avatarUrl) {
         return userRepository.findByEmail(email)
                 .orElseGet(() -> {
@@ -157,7 +149,6 @@ public class AuthenticationService {
                     User newUser = User.builder()
                             .username(name != null && !name.isBlank() ? name : email.split("@")[0])
                             .email(email)
-                            // user OAuth không đăng nhập bằng password, lưu hash của chuỗi random để cột password không null
                             .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
                             .imageUrl(avatarUrl)
                             .createdAt(LocalDateTime.now())
@@ -168,7 +159,7 @@ public class AuthenticationService {
                 });
     }
 
-    // HELPER: tạo access + refresh token
+    // HELPER
     public AuthResponse buildAuthResponse(User user, String message) {
 
         String accessToken = jwtService.generateToken(user.getEmail());
