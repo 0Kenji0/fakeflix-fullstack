@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
@@ -22,7 +22,10 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [slowHint, setSlowHint] = useState(false);
+
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [errors, setErrors] = useState({
     username: "",
@@ -30,6 +33,13 @@ export default function RegisterScreen() {
     password: "",
     confirmPassword: "",
   });
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimer.current) clearTimeout(redirectTimer.current);
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+    };
+  }, []);
 
   const validateField = (
     field: string,
@@ -57,6 +67,8 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     setError("");
     setSuccess("");
+    setSlowHint(false);
+
     if (!username || !email || !password || !confirmPassword) {
       setError("Vui lòng điền đầy đủ thông tin");
       return;
@@ -79,22 +91,37 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
+    slowTimer.current = setTimeout(() => setSlowHint(true), 5000);
+
     try {
       await register(username, email, password);
+      setSlowHint(false);
       setSuccess("Đăng ký thành công! Đang chuyển hướng...");
       redirectTimer.current = setTimeout(() => {
-        router.replace("/login" as any);
-      }, 1500);
+        router.replace("/(tabs)" as any);
+      }, 1000);
     } catch (e: unknown) {
+      setSlowHint(false);
       const err = e as {
-        response?: { data?: { error?: string; message?: string } };
+        response?: {
+          data?: { error?: string; message?: string };
+          status?: number;
+        };
+        code?: string;
       };
-      setError(
-        err?.response?.data?.error ||
-          err?.response?.data?.message ||
-          "Đăng ký thất bại, thử lại",
-      );
+      if (err.code === "ECONNABORTED" || err.code === "ERR_NETWORK") {
+        setError("Server đang khởi động, vui lòng thử lại sau 30 giây");
+      } else if (err.response?.status === 409) {
+        setError("Email hoặc tên người dùng đã tồn tại");
+      } else {
+        setError(
+          err?.response?.data?.error ||
+            err?.response?.data?.message ||
+            "Đăng ký thất bại, thử lại",
+        );
+      }
     } finally {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
       setLoading(false);
     }
   };
@@ -139,6 +166,7 @@ export default function RegisterScreen() {
             }}
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!loading}
           />
           {!!errors.username && (
             <Text style={styles.fieldError}>{errors.username}</Text>
@@ -157,6 +185,7 @@ export default function RegisterScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!loading}
           />
           {!!errors.email && (
             <Text style={styles.fieldError}>{errors.email}</Text>
@@ -170,13 +199,13 @@ export default function RegisterScreen() {
             onChangeText={(t) => {
               setPassword(t);
               validateField("password", t);
-              // re-validate confirmPassword với password mới
               if (confirmPassword.length > 0) {
                 validateField("confirmPassword", confirmPassword, t);
               }
               setError("");
             }}
             secureTextEntry
+            editable={!loading}
           />
           {!!errors.password && (
             <Text style={styles.fieldError}>{errors.password}</Text>
@@ -196,6 +225,7 @@ export default function RegisterScreen() {
               setError("");
             }}
             secureTextEntry
+            editable={!loading}
           />
           {!!errors.confirmPassword && (
             <Text style={styles.fieldError}>{errors.confirmPassword}</Text>
@@ -207,13 +237,31 @@ export default function RegisterScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.loadingText}>
+                  {slowHint ? "Đang khởi động server..." : "Đang xử lý..."}
+                </Text>
+              </View>
             ) : (
               <Text style={styles.buttonText}>{"Đăng ký"}</Text>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => router.push("/login" as any)}>
+          {slowHint && (
+            <View style={styles.hintBox}>
+              <Text style={styles.hintText}>
+                {
+                  "⏳ Server đang khởi động (free tier), vui lòng chờ khoảng 1-2 phút..."
+                }
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            onPress={() => router.push("/login" as any)}
+            disabled={loading}
+          >
             <Text style={styles.link}>
               {"Đã có tài khoản? "}
               <Text style={styles.linkBold}>{"Đăng nhập"}</Text>
@@ -277,6 +325,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   successText: { color: "#00c800", fontSize: 13, textAlign: "center" },
+  hintBox: {
+    backgroundColor: "rgba(255,165,0,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,165,0,0.4)",
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 12,
+  },
+  hintText: {
+    color: "#ffb347",
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 18,
+  },
   fieldError: {
     color: "#E50914",
     fontSize: 11,
@@ -301,10 +363,12 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: "center",
     marginTop: 8,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  buttonDisabled: { opacity: 0.6 },
+  buttonDisabled: { opacity: 0.7 },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  loadingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  loadingText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   link: { color: "#aaa", textAlign: "center", fontSize: 14, marginTop: 4 },
   linkBold: { color: "#fff", fontWeight: "bold" },
 });
